@@ -86,6 +86,7 @@ class MCPInstaller:
     def __init__(self):
         self.os_type = self._detect_os()
         self.bitwarden_available = False
+        self.bw_path = None  # Store validated bw command path
         self._check_bitwarden()
     
     @staticmethod
@@ -108,24 +109,28 @@ class MCPInstaller:
     
     def _check_bitwarden(self):
         """Check if Bitwarden CLI is available and unlocked"""
-        if not self._command_exists("bw"):
+        # Get the full path to bw command to prevent PATH injection
+        bw_path = shutil.which("bw")
+        if not bw_path:
             Logger.warning("Bitwarden CLI (bw) not found. API keys will need to be configured manually.")
             return
         
         try:
             result = subprocess.run(
-                ["bw", "status"],
+                [bw_path, "status"],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
+                timeout=10  # Add timeout to prevent hanging
             )
             status_data = json.loads(result.stdout)
             if status_data.get("status") == "unlocked":
                 self.bitwarden_available = True
+                self.bw_path = bw_path  # Store for later use
                 Logger.success("Bitwarden CLI is available and unlocked")
             else:
                 Logger.warning("Bitwarden vault is locked. Please unlock it with: bw unlock")
-        except (subprocess.SubprocessError, json.JSONDecodeError, KeyError):
+        except (subprocess.SubprocessError, json.JSONDecodeError, KeyError, subprocess.TimeoutExpired):
             Logger.warning("Could not determine Bitwarden status")
     
     def get_api_key_from_bitwarden(self, key_name: str) -> Optional[str]:
@@ -133,13 +138,21 @@ class MCPInstaller:
         if not self.bitwarden_available:
             return None
         
+        # Validate key_name to prevent command injection
+        # Only allow alphanumeric, underscore, and hyphen
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]+$', key_name):
+            Logger.warning(f"Invalid key name '{key_name}': only alphanumeric, underscore, and hyphen allowed")
+            return None
+        
         try:
-            # Search for the item
+            # Search for the item using the validated path
             result = subprocess.run(
-                ["bw", "list", "items", "--search", key_name],
+                [self.bw_path, "list", "items", "--search", key_name],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                timeout=10
             )
             items = json.loads(result.stdout)
             
@@ -153,10 +166,11 @@ class MCPInstaller:
             
             # Get the password
             result = subprocess.run(
-                ["bw", "get", "password", item_id],
+                [self.bw_path, "get", "password", item_id],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                timeout=10
             )
             
             api_key = result.stdout.strip()
@@ -164,7 +178,7 @@ class MCPInstaller:
                 Logger.success(f"Retrieved '{key_name}' from Bitwarden")
                 return api_key
             
-        except (subprocess.SubprocessError, json.JSONDecodeError, KeyError, IndexError):
+        except (subprocess.SubprocessError, json.JSONDecodeError, KeyError, IndexError, subprocess.TimeoutExpired):
             Logger.warning(f"Could not retrieve API key for '{key_name}'")
         
         return None
@@ -221,7 +235,8 @@ class MCPInstaller:
     def backup_file(self, file_path: Path) -> Path:
         """Create a backup of a file"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = file_path.with_suffix(f".backup.{timestamp}{file_path.suffix}")
+        # Use a cleaner backup naming pattern
+        backup_path = file_path.parent / f"{file_path.stem}.backup.{timestamp}{file_path.suffix}"
         shutil.copy2(file_path, backup_path)
         Logger.info(f"Backed up existing file to {backup_path.name}")
         return backup_path
@@ -249,8 +264,9 @@ class MCPInstaller:
                 with open(settings_file, 'r') as f:
                     settings = json.load(f)
                 self.backup_file(settings_file)
-            except json.JSONDecodeError:
-                Logger.warning("Existing settings.json is invalid, creating new one")
+            except (json.JSONDecodeError, PermissionError, FileNotFoundError) as e:
+                Logger.warning(f"Could not read existing settings: {e}")
+                Logger.warning("Creating new settings.json")
                 settings = {}
         else:
             Logger.info("Created new settings.json")
@@ -281,11 +297,15 @@ class MCPInstaller:
         # Update settings
         settings["mcpServers"] = mcp_servers
         
-        # Write settings
-        with open(settings_file, 'w') as f:
-            json.dump(settings, f, indent=2)
-        
-        Logger.success(f"Configured {ide} with MCP servers")
+        # Write settings with proper error handling
+        try:
+            with open(settings_file, 'w') as f:
+                json.dump(settings, f, indent=2)
+            Logger.success(f"Configured {ide} with MCP servers")
+        except (PermissionError, IOError, OSError) as e:
+            Logger.error(f"Failed to write settings file: {e}")
+            Logger.error(f"Please check file permissions for {settings_file}")
+            Logger.error("You may need to run the script with appropriate permissions")
     
     def configure_claude(self, default_path: Optional[str] = None):
         """Configure Claude Desktop"""
@@ -310,8 +330,9 @@ class MCPInstaller:
                 with open(config_file, 'r') as f:
                     config = json.load(f)
                 self.backup_file(config_file)
-            except json.JSONDecodeError:
-                Logger.warning("Existing config is invalid, creating new one")
+            except (json.JSONDecodeError, PermissionError, FileNotFoundError) as e:
+                Logger.warning(f"Could not read existing config: {e}")
+                Logger.warning("Creating new config")
                 config = {"mcpServers": {}}
         else:
             Logger.info("Created new claude_desktop_config.json")
@@ -352,11 +373,15 @@ class MCPInstaller:
         # Update config
         config["mcpServers"] = mcp_servers
         
-        # Write config
-        with open(config_file, 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        Logger.success("Configured Claude Desktop with MCP servers")
+        # Write config with proper error handling
+        try:
+            with open(config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+            Logger.success("Configured Claude Desktop with MCP servers")
+        except (PermissionError, IOError, OSError) as e:
+            Logger.error(f"Failed to write config file: {e}")
+            Logger.error(f"Please check file permissions for {config_file}")
+            Logger.error("You may need to run the script with appropriate permissions")
     
     def install(self, ides: List[str], workspace_folder: Optional[str] = None):
         """Main installation method"""

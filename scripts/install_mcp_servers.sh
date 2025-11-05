@@ -100,7 +100,14 @@ get_api_key_from_bitwarden() {
         return 1
     fi
     
-    # Try to find the item in Bitwarden
+    # Validate key_name to prevent command injection
+    # Only allow alphanumeric, underscore, and hyphen
+    if ! [[ "$key_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        print_warning "Invalid key name '$key_name': only alphanumeric, underscore, and hyphen allowed"
+        return 1
+    fi
+    
+    # Try to find the item in Bitwarden using validated input
     local item_id=$(bw list items --search "$key_name" 2>/dev/null | jq -r '.[0].id // empty')
     
     if [ -z "$item_id" ]; then
@@ -215,7 +222,11 @@ MCPCONFIG
 )
     
     # Merge MCP configuration into existing settings
-    jq -s '.[0] * .[1]' "$settings_file" <(echo "$mcp_config") > "$settings_file.tmp"
+    if ! jq -s '.[0] * .[1]' "$settings_file" <(echo "$mcp_config") > "$settings_file.tmp"; then
+        print_error "Failed to merge MCP configuration"
+        rm -f "$settings_file.tmp"
+        return 1
+    fi
     mv "$settings_file.tmp" "$settings_file"
     
     print_success "Configured $ide with MCP servers"
@@ -288,13 +299,17 @@ configure_claude() {
 MCPSERVERS
 )
     
-    # Add GitHub server if token is available
+    # Add GitHub server if token is available (using jq --arg for safe string interpolation)
     if [ "$github_token" != "<YOUR_TOKEN>" ]; then
-        mcp_servers=$(echo "$mcp_servers" | jq ". + {\"github\": {\"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"], \"env\": {\"GITHUB_PERSONAL_ACCESS_TOKEN\": \"$github_token\"}}}")
+        mcp_servers=$(echo "$mcp_servers" | jq --arg token "$github_token" '. + {"github": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": $token}}}')
     fi
     
-    # Update config file
-    jq ".mcpServers = $mcp_servers" "$config_file" > "$config_file.tmp"
+    # Update config file with error handling
+    if ! jq --argjson servers "$mcp_servers" '.mcpServers = $servers' "$config_file" > "$config_file.tmp"; then
+        print_error "Failed to update configuration"
+        rm -f "$config_file.tmp"
+        return 1
+    fi
     mv "$config_file.tmp" "$config_file"
     
     print_success "Configured Claude Desktop with MCP servers"
