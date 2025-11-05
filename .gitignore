@@ -292,6 +292,13 @@ cython_debug/
 
 .DS_Store
 
+# Docker and deployment
+mcp-gateway-config.json
+/tmp/deploy-response.json
+/tmp/status.json
+data/
+repos/
+
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

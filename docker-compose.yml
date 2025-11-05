@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # MCP Everything Server - Reference/test server with prompts, resources, and tools
+  mcp-everything:
+    image: ghcr.io/cbwinslow/mcp-server-everything:latest
+    container_name: mcp-everything
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Fetch Server - Web content fetching and conversion
+  mcp-fetch:
+    image: ghcr.io/cbwinslow/mcp-server-fetch:latest
+    container_name: mcp-fetch
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Filesystem Server - Secure file operations
+  mcp-filesystem:
+    image: ghcr.io/cbwinslow/mcp-server-filesystem:latest
+    container_name: mcp-filesystem
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    volumes:
+      # Mount allowed directories here
+      - ./data:/data:ro
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Git Server - Git repository operations
+  mcp-git:
+    image: ghcr.io/cbwinslow/mcp-server-git:latest
+    container_name: mcp-git
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    volumes:
+      # Mount git repositories here
+      - ./repos:/repos:ro
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Memory Server - Knowledge graph-based persistent memory
+  mcp-memory:
+    image: ghcr.io/cbwinslow/mcp-server-memory:latest
+    container_name: mcp-memory
+    restart: unless-stopped
+    ports:
+      - "3004:3000"
+    volumes:
+      # Persist memory data
+      - mcp-memory-data:/data
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Sequential Thinking Server - Dynamic problem-solving
+  mcp-sequentialthinking:
+    image: ghcr.io/cbwinslow/mcp-server-sequentialthinking:latest
+    container_name: mcp-sequentialthinking
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Time Server - Time and timezone conversion
+  mcp-time:
+    image: ghcr.io/cbwinslow/mcp-server-time:latest
+    container_name: mcp-time
+    restart: unless-stopped
+    ports:
+      - "3006:3000"
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  mcp-memory-data:
+    driver: local
