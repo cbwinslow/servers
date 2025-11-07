@@ -772,6 +772,29 @@ Additional resources on MCP.
 
 ## 🚀 Getting Started
 
+### Quick Installation (Automated)
+
+We provide installation scripts that automatically configure MCP servers for VSCode, Cursor, Windsurf, and Claude Desktop:
+
+```bash
+# Install for all IDEs
+./scripts/install_mcp_servers.py --all
+
+# Install for specific IDEs
+./scripts/install_mcp_servers.py --vscode --cursor
+
+# With Bitwarden integration for API keys
+./scripts/install_mcp_servers.sh --all
+```
+
+The scripts support:
+- ✅ Multi-IDE configuration (VSCode, Cursor, Windsurf, Claude Desktop)
+- 🔒 Bitwarden CLI integration for automatic API key population
+- 🔄 Automatic backups of existing configurations
+- 🌍 Cross-platform support (macOS, Linux, Windows)
+
+See [scripts/README.md](scripts/README.md) for detailed installation instructions.
+
 ### Using MCP Servers in this Repository
 Typescript-based servers in this repository can be used directly with `npx`.
 
