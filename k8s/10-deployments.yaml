@@ -1,0 +1,52 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-everything
+  namespace: mcp-servers
+  labels:
+    app: mcp-everything
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-everything
+  template:
+    metadata:
+      labels:
+        app: mcp-everything
+    spec:
+      containers:
+      - name: mcp-everything
+        image: ghcr.io/cbwinslow/mcp-server-everything:latest
+        imagePullPolicy: Always
+        env:
+        - name: NODE_ENV
+          value: "production"
+        ports:
+        - containerPort: 3000
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-everything
+  namespace: mcp-servers
+  labels:
+    app: mcp-everything
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: mcp-everything
